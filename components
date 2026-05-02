@@ -1,0 +1,6 @@
+Components Used:
+- ESP32 DevKit V1 — WiFi-enabled main controller
+- MG996R Servo Motor — handles food dispensing by rotating to open the food gate
+- HC-SR04 Ultrasonic Sensor — continuously measures the food level inside the container and displays it in real time
+- SSD1306 OLED Display — shows current time, food level, next scheduled feed time, last feed time, and system status
+- 4x Manual Push Buttons — allows the owner to operate the feeder manually without needing a phone

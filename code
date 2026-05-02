@@ -1,0 +1,187 @@
+// Replace these with your actual Blynk credentials
+#define BLYNK_TEMPLATE_ID "TMPL_YOUR_ID"
+#define BLYNK_TEMPLATE_NAME "Pet Feeder"
+#define BLYNK_AUTH_TOKEN "YOUR_AUTH_TOKEN"
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <ESP32Servo.h>
+#include <time.h> // Required for real-time clock (NTP)
+
+// WiFi Credentials
+char ssid[] = "YOUR_WIFI_SSID";
+char pass[] = "YOUR_WIFI_PASSWORD";
+
+// Hardware Pins
+Servo feederServo;
+const int servoPin = 13;
+const int TRIG_DOG = 14;
+const int ECHO_DOG = 27;
+const int TRIG_FOOD = 32;
+const int ECHO_FOOD = 33;
+
+BlynkTimer timer;
+
+// Dashboard Variables (matching your UI defaults)
+int portionSize = 60;   // V2 Slider
+int feedCount = 3;      // V7 Label
+int foodPercent = 75;   // V1 Gauge
+bool dogPresent = false;
+
+// Scheduling Variables (V4)
+int scheduledHour = 8;
+int scheduledMinute = 0;
+bool fedThisMinute = false; 
+
+// NTP Time Settings (India Standard Time is UTC +5:30 -> 19800 seconds)
+const long gmtOffset_sec = 19800; 
+const int daylightOffset_sec = 0;
+
+// --- Helper Functions ---
+
+long getDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH, 30000); // 30ms timeout
+  if(duration == 0) return 999; 
+  return duration * 0.034 / 2;
+}
+
+// Function to handle the actual feeding
+void triggerFeed() {
+  // Map the 0-100% slider to servo open time (e.g., 100ms to 800ms)
+  int openDuration = map(portionSize, 0, 100, 100, 800);
+  
+  feederServo.write(90); // Open flap
+  delay(openDuration);   // Wait based on V2 slider
+  feederServo.write(0);  // Close flap
+  
+  feedCount++;
+  Blynk.virtualWrite(V7, feedCount); // Update V7 Feed Count
+  
+  // Optional: Update a bottom banner string (e.g., V9)
+  // String lastFedStr = "Last fed just now — " + String(portionSize) + "% portion";
+  // Blynk.virtualWrite(V9, lastFedStr);
+}
+
+// --- Blynk V-Pin Handlers ---
+
+// V0: Feed Now Button
+BLYNK_WRITE(V0) {
+  if (param.asInt() == 1) {
+    triggerFeed();
+    Blynk.virtualWrite(V0, 0); // Reset button in app
+  }
+}
+
+// V2: Portion Size Slider
+BLYNK_WRITE(V2) {
+  portionSize = param.asInt();
+}
+
+// V4: Schedule Time Input
+BLYNK_WRITE(V4) {
+  TimeInputParam t(param);
+  if (t.hasStartTime()) {
+    scheduledHour = t.getStartHour();
+    scheduledMinute = t.getStartMinute();
+  }
+}
+
+// V8: Tare Scale Button (Placeholder)
+BLYNK_WRITE(V8) {
+  if (param.asInt() == 1) {
+    // If you add an HX711 load cell later, put scale.tare() here
+    Blynk.virtualWrite(V8, 0); 
+  }
+}
+
+// --- Timer Functions ---
+
+// 1. Check time every minute to trigger scheduled feed
+void checkSchedule() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return; // Failed to get time
+
+  if (timeinfo.tm_hour == scheduledHour && timeinfo.tm_min == scheduledMinute) {
+    if (!fedThisMinute) {
+      triggerFeed();
+      fedThisMinute = true; // Prevent multiple feeds in the same minute
+    }
+  } else {
+    fedThisMinute = false; // Reset flag when minute passes
+  }
+}
+
+// 2. Read Sensors and Update UI (runs every 2 seconds)
+void processSensorsAndUI() {
+  // --- Read Ultrasonic Sensors ---
+  long foodDist = getDistance(TRIG_FOOD, ECHO_FOOD);
+  foodPercent = map(foodDist, 25, 5, 0, 100); // Adjust 25(empty) & 5(full) to your box
+  foodPercent = constrain(foodPercent, 0, 100);
+  Blynk.virtualWrite(V1, foodPercent);
+
+  long dogDist = getDistance(TRIG_DOG, ECHO_DOG);
+  dogPresent = (dogDist > 0 && dogDist < 50); // Dog is within 50cm
+  Blynk.virtualWrite(V6, dogPresent ? "YES" : "NO");
+
+  // --- Format Time ---
+  struct tm timeinfo;
+  char timeStr[10];
+  if (getLocalTime(&timeinfo)) {
+    strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
+  } else {
+    strcpy(timeStr, "--:--"); // If WiFi/NTP isn't synced yet
+  }
+
+  // Format Next Feed String (AM/PM)
+  String ampm = (scheduledHour >= 12) ? " PM" : " AM";
+  int displayHour = (scheduledHour % 12 == 0) ? 12 : (scheduledHour % 12);
+  char nextFeedStr[15];
+  sprintf(nextFeedStr, "%02d:%02d%s", displayHour, scheduledMinute, ampm.c_str());
+
+  // --- Build OLED Preview String (V5) ---
+  String oledText = "PetFeeder WiFi:OK\n";
+  oledText += "Food: " + String(foodPercent) + "% | " + String(timeStr) + "\n";
+  oledText += "Next feed: " + String(nextFeedStr);
+  
+  Blynk.virtualWrite(V5, oledText);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // Setup Pins
+  pinMode(TRIG_DOG, OUTPUT);
+  pinMode(ECHO_DOG, INPUT);
+  pinMode(TRIG_FOOD, OUTPUT);
+  pinMode(ECHO_FOOD, INPUT);
+
+  // Setup Servo
+  feederServo.setPeriodHertz(50);
+  feederServo.attach(servoPin, 500, 2400);
+  feederServo.write(0); 
+
+  // Connect to WiFi and Blynk
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  // Initialize Network Time Protocol (NTP) for Indian Standard Time
+  configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+
+  // Push initial values to dashboard
+  Blynk.virtualWrite(V2, portionSize);
+  Blynk.virtualWrite(V7, feedCount);
+
+  // Set Timers
+  timer.setInterval(2000L, processSensorsAndUI); // Update sensors & OLED every 2s
+  timer.setInterval(10000L, checkSchedule);      // Check schedule every 10s
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}

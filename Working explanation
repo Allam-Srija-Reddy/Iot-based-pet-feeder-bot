@@ -1,0 +1,24 @@
+Excited to share that I recently participated in PUPA Make-In-BVB 2k25-26 at KLE Technological University — and it was an incredible experience!
+
+Our team built an IoT-Based Automatic Pet Feeder Bot, a smart system that lets pet owners feed their dogs remotely from anywhere in the world — no more worrying about your pet while you're at work or travelling!
+
+Here's what we built:
+
+At the heart of the system is the ESP32 DevKit V1 — chosen specifically because it's a WiFi-enabled microcontroller, meaning the owner can control everything through the Blynk app from any location.
+
+Components Used:
+- ESP32 DevKit V1 — WiFi-enabled main controller
+- MG996R Servo Motor — handles food dispensing by rotating to open the food gate
+- HC-SR04 Ultrasonic Sensor — continuously measures the food level inside the container and displays it in real time
+- SSD1306 OLED Display — shows current time, food level, next scheduled feed time, last feed time, and system status
+- 4x Manual Push Buttons — allows the owner to operate the feeder manually without needing a phone
+
+How it works:
+
+The owner can schedule feeding for morning, afternoon and evening via the Blynk app. Hit "Feed Now" anytime from anywhere to instantly dispense food. Custom portion sizes ensure your dog gets exactly the right amount. The OLED display shows everything at a glance — feed schedule, food level, and last fed time. If WiFi is unavailable, the 4 manual buttons let you control it directly on the device. The ultrasonic sensor monitors food levels so you always know when to refill.
+
+The best part? You don't need to be home. Whether you're at the office, travelling, or just busy — your dog gets fed on time, every time.
+
+This project was a fantastic blend of IoT, embedded systems, and real-world problem solving. Grateful for my amazing team and the platform PUPA Make-In-BVB gave us to showcase our work!
+
+#IoT #ESP32 #EmbeddedSystems #PetFeeder #Blynk #KLETechUniversity #PUPA #MakeInBVB #Engineering #StudentProjects #Innovation #SmartHome
